@@ -10,7 +10,7 @@ export default function Signup() {
     console.log("🔥 BUTTON CLICKED");
 
     try {
-      const response = await fetch("http://127.0.0.1:5000/signup", {
+      const response = await fetch("https://jubilant-space-engine-q7wvjrp99qpj3jgp-5000.app.github.dev/signup", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
