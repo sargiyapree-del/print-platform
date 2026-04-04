@@ -90,7 +90,6 @@ app.post("/login", async (req, res) => {
 // UPLOAD
 app.post("/upload", upload.single("file"), (req, res) => {
   console.log("FILE RECEIVED:", req.file);
-
   if (!req.file) {
     return res.status(400).json({
       message: "No file uploaded ❌"
@@ -104,13 +103,10 @@ app.post("/upload", upload.single("file"), (req, res) => {
 });
 
 // GET ORDERS (FIXED 🔥)
-app.get("/orders/:user_id", async (req, res) => {
-  const { user_id } = req.params;
-
+app.get("/admin/orders", async (req, res) => {
   const { data, error } = await supabase
     .from("orders")
-    .select("*")
-    .eq("user_id", user_id);
+    .select("*");
 
   if (error) {
     return res.status(400).json({ message: "Error fetching orders ❌" });
@@ -119,47 +115,68 @@ app.get("/orders/:user_id", async (req, res) => {
   res.json(data);
 });
 
+//update status
+
+app.put("/admin/order/:id", async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  const { error } = await supabase
+    .from("orders")
+    .update({ status })
+    .eq("id", id);
+
+  if (error) {
+    return res.status(400).json({ message: "Update failed ❌" });
+  }
+
+  res.json({ message: "Status updated ✅" });
+});
+
 // ORDER
 
 app.post("/order", async (req, res) => {
   try {
     console.log("REQ BODY:", req.body);
 
-    const { fileName, copies, totalPrice, user_id } = req.body;
+    const { fileName, copies, totalPrice, user_id, pickup_time } = req.body;
 
     // Validation
-    if (
-      user_id === undefined ||
-      !fileName ||
-      copies === undefined ||
-      totalPrice === undefined
-    ) {
-      console.log("❌ VALIDATION FAILED");
-      return res.status(400).json({ message: "Missing fields ❌" });
+   // Validation
+if (
+  user_id === undefined ||
+  !fileName ||
+  copies === undefined ||
+  totalPrice === undefined ||
+  !pickup_time
+) {
+  console.log("❌ VALIDATION FAILED");
+  return res.status(400).json({ message: "Missing fields ❌" });
+}
+
+console.log("✅ VALIDATION PASSED");
+
+const { data, error } = await supabase
+  .from("orders")
+  .insert([
+    {
+      file_name: fileName,
+      copies,
+      total_price: totalPrice,
+      user_id,
+      pickup_time,
+      status: "pending"
     }
+  ]);
 
-    console.log("✅ VALIDATION PASSED");
+if (error) {
+  console.log("🔥 SUPABASE ERROR FULL:", error);
+  return res.status(400).json({ message: error.message });
+}
 
-    const { data, error } = await supabase
-      .from("orders")
-      .insert([
-        {
-          file_name: fileName,
-          copies,
-          total_price: totalPrice,
-          user_id,
-          status: "pending"
-        }
-      ]);
+console.log("✅ INSERT SUCCESS:", data);
 
-    if (error) {
-      console.log("🔥 SUPABASE ERROR FULL:", error);
-      return res.status(400).json({ message: error.message });
-    }
-
-    console.log("✅ INSERT SUCCESS:", data);
-
-    res.json({ message: "Order placed successfully ✅" });
+res.json({ message: "Order placed successfully ✅" });
 
   } catch (err) {
     console.log("💥 SERVER ERROR:", err);
