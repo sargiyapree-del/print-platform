@@ -1,16 +1,23 @@
 "use client";
+
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 export default function Signup() {
+  const router = useRouter();
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const handleSignup = async () => {
-    console.log("🔥 BUTTON CLICKED");
+    if (!name || !email || !password) {
+      alert("All fields are required ❌");
+      return;
+    }
 
     try {
-      const response = await fetch("https://jubilant-space-engine-q7wvjrp99qpj3jgp-5000.app.github.dev/signup", {
+      const res = await fetch("http://localhost:5000/signup", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -22,51 +29,83 @@ export default function Signup() {
         })
       });
 
-      const data = await response.json();
-      console.log("Response:", data);
+      const data = await res.json();
 
-      alert(data.message);
-    } catch (error) {
-      console.log("Error:", error);
-      alert("Signup failed ❌");
+      if (!res.ok) {
+        alert(data.message || "Signup failed ❌");
+        return;
+      }
+
+      alert("Signup successful ✅");
+      router.push("/login");
+
+    } catch (err) {
+      console.log("SIGNUP ERROR:", err);
+      alert("Something went wrong ❌");
     }
   };
 
   return (
-    <div className="flex h-screen items-center justify-center">
-      <div className="p-6 border rounded-lg w-80">
-        <h2 className="text-xl font-bold mb-4">Signup</h2>
+    <div className="min-h-screen flex items-center justify-center bg-gray-100">
 
-        <input
-          type="text"
-          placeholder="Name"
-          className="w-full mb-2 p-2 border rounded"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
+      <div className="bg-white p-8 rounded-xl shadow-md w-full max-w-md">
 
-        <input
-          type="email"
-          placeholder="Email"
-          className="w-full mb-2 p-2 border rounded"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
+        <h1 className="text-2xl font-bold text-gray-900 text-center">
+          Create Account 🚀
+        </h1>
 
-        <input
-          type="password"
-          placeholder="Password"
-          className="w-full mb-4 p-2 border rounded"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
+        <p className="text-gray-500 text-center mt-2">
+          Signup to get started
+        </p>
 
+        {/* Inputs */}
+        <div className="mt-6 space-y-4">
+
+          <input
+            type="text"
+            placeholder="Full Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="w-full p-3 border rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-red-400"
+          />
+
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full p-3 border rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-red-400"
+          />
+
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full p-3 border rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-red-400"
+          />
+
+        </div>
+
+        {/* Button */}
         <button
           onClick={handleSignup}
-          className="w-full bg-green-500 text-white p-2 rounded"
+          className="w-full mt-6 bg-red-500 text-white py-3 rounded-lg font-semibold hover:bg-red-600"
         >
           Signup
         </button>
+
+        {/* Redirect */}
+        <p className="text-center text-gray-500 mt-4">
+          Already have an account?{" "}
+          <span
+            onClick={() => router.push("/login")}
+            className="text-red-500 cursor-pointer font-medium"
+          >
+            Login
+          </span>
+        </p>
+
       </div>
     </div>
   );
