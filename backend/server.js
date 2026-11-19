@@ -1,105 +1,114 @@
-const express = require("express");
-const multer = require("multer");
-const bcrypt = require("bcrypt");
-const fs = require("fs");
-const pdfParse = require("pdf-parse");
 
-const supabase = require("./supabaseClient");
+  console.log("KEY SECRET:", process.env.RAZORPAY_KEY_SECRET);
+  console.log("KEY ID:", process.env.RAZORPAY_KEY_ID);
+  require("dotenv").config();
+  const express = require("express");
+  const multer = require("multer");
+  const bcrypt = require("bcrypt");
+  const fs = require("fs");
+  const pdfParse = require("pdf-parse");
 
-const app = express();
+  const supabase = require("./supabaseClient");
 
+  const app = express();
+  console.log("KEY ID:", process.env.RAZORPAY_KEY_ID);
+  console.log("KEY SECRET:", process.env.RAZORPAY_KEY_SECRET);
+  const Razorpay = require("razorpay");
 
-const Razorpay = require("razorpay");
-
-
-
-// ======================
-// CORS
-// ======================
-
-app.use((req, res, next) => {
-
-  res.setHeader(
-    "Access-Control-Allow-Origin",
-    "*"
-  );
-
-  res.setHeader(
-    "Access-Control-Allow-Methods",
-    "GET, POST, PUT, DELETE, OPTIONS"
-  );
-
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Content-Type"
-  );
-
-  if (req.method === "OPTIONS") {
-
-    return res.sendStatus(200);
-
-  }
-
-  next();
-
-});
-
-app.use(express.json());
-app.use("/uploads", express.static("uploads"));
+  const razorpay = new Razorpay({
+    key_id: process.env.RAZORPAY_KEY_ID,
+    key_secret: process.env.RAZORPAY_KEY_SECRET,
+  });
 
 
-// ======================
-// MULTER CONFIG
-// ======================
 
-const storage =
-  multer.diskStorage({
+  // ======================
+  // CORS
+  // ======================
 
-    destination: function (
-      req,
-      file,
-      cb
-    ) {
+  app.use((req, res, next) => {
 
-      cb(null, "uploads/");
+    res.setHeader(
+      "Access-Control-Allow-Origin",
+      "*"
+    );
 
-    },
+    res.setHeader(
+      "Access-Control-Allow-Methods",
+      "GET, POST, PUT, DELETE, OPTIONS"
+    );
 
-    filename: function (
-      req,
-      file,
-      cb
-    ) {
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type"
+    );
 
-      cb(
-        null,
-        Date.now() +
-          "-" +
-          file.originalname
-      );
+    if (req.method === "OPTIONS") {
 
-    },
+      return res.sendStatus(200);
+
+    }
+
+    next();
 
   });
 
-const upload =
-  multer({ storage });
+  app.use(express.json());
+  app.use("/uploads", express.static("uploads"));
 
 
-// ======================
-// HOME
-// ======================
+  // ======================
+  // MULTER CONFIG
+  // ======================
 
-app.get("/", (req, res) => {
+  const storage =
+    multer.diskStorage({
 
-  res.send(
-    "Backend running 🚀"
-  );
+      destination: function (
+        req,
+        file,
+        cb
+      ) {
 
-});
+        cb(null, "uploads/");
+
+      },
+
+      filename: function (
+        req,
+        file,
+        cb
+      ) {
+
+        cb(
+          null,
+          Date.now() +
+            "-" +
+            file.originalname
+        );
+
+      },
+
+    });
+
+  const upload =
+    multer({ storage });
 
 
-// ======================
+  // ======================
+  // HOME
+  // ======================
+
+  app.get("/", (req, res) => {
+
+    res.send(
+      "Backend running 🚀"
+    );
+
+  });
+
+
+ // ======================
 // SIGNUP
 // ======================
 
@@ -115,11 +124,38 @@ app.post(
         password,
       } = req.body;
 
+      const normalizedEmail = email
+        .toLowerCase()
+        .trim();
+
+      // CHECK IF EMAIL ALREADY EXISTS
+
+      const { data: existingUser } =
+        await supabase
+          .from("users")
+          .select("*")
+          .eq("email", normalizedEmail);
+
+      if (existingUser.length > 0) {
+
+        return res
+          .status(400)
+          .json({
+            message:
+              "Email already exists ❌",
+          });
+
+      }
+
+      // HASH PASSWORD
+
       const hashedPassword =
         await bcrypt.hash(
           password,
           10
         );
+
+      // INSERT NEW USER
 
       const { error } =
         await supabase
@@ -127,9 +163,8 @@ app.post(
           .insert([
             {
               name,
-              email,
-              password:
-                hashedPassword,
+              email: normalizedEmail,
+              password: hashedPassword,
             },
           ]);
 
@@ -161,386 +196,436 @@ app.post(
     }
 
   }
-);
+); 
+  // ======================
+  // LOGIN
+  // ======================
 
+  app.post(
+    "/login",
+    async (req, res) => {
 
-// ======================
-// LOGIN
-// ======================
+      try {
 
-app.post(
-  "/login",
-  async (req, res) => {
-
-    try {
-
-      const {
-        email,
-        password,
-      } = req.body;
-
-      const {
-        data: user,
-      } = await supabase
-        .from("users")
-        .select("*")
-        .eq("email", email)
-        .single();
-
-      if (!user) {
-
-        return res
-          .status(400)
-          .json({
-            message:
-              "User not found ❌",
-          });
-
-      }
-
-      const isMatch =
-        await bcrypt.compare(
+        const {
+          email,
           password,
-          user.password
-        );
+        } = req.body;
 
-      if (!isMatch) {
+       const normalizedEmail = email
+  .toLowerCase()
+  .trim();
 
-        return res
-          .status(400)
-          .json({
-            message:
-              "Wrong password ❌",
-          });
+console.log("EMAIL RECEIVED:", normalizedEmail);
 
-      }
+const {
+  data,
+  error
+} = await supabase
+  .from("users")
+  .select("*");
 
-      res.json({
+console.log("ALL USERS:", data);
 
-        message:
-          "Login successful ✅",
-
-        user,
-
-      });
-
-    } catch (err) {
-
-      console.log(err);
-
-      res.status(500).json({
-
-        message:
-          "Server Error ❌",
-
-      });
-
-    }
-
-  }
+const user = data.find(
+  (u) =>
+    u.email.toLowerCase().trim() ===
+    normalizedEmail
 );
 
+console.log("FOUND USER:", user);
+console.log("ERROR:", error);
 
-// ======================
-// CALCULATE PRICE
-// ======================
+if (!user) {
 
-app.post(
-  "/upload",
-  upload.array("files", 10),
-  async (req, res) => {
+  return res
+    .status(400)
+    .json({
+      message: "User not found ❌",
+    });
 
-    try {
-
-      if (!req.files) {
-
-        return res
-          .status(400)
-          .json({
-            message:
-              "No files uploaded ❌",
-          });
-
-      }
-
-      let filesData = [];
-
-      for (const file of req.files) {
-
-        const dataBuffer =
-          fs.readFileSync(
-            file.path
-          );
-
-        const pdfData =
-          await pdfParse(
-            dataBuffer
-          );
-
-        const pages =
-          pdfData.numpages;
-
-        filesData.push({
-
-          file_name:
-            file.originalname,
-
-          pages,
-
-        });
-
-      }
-
-      res.json({
-
-        success: true,
-
-        files: filesData,
-
-      });
-
-    } catch (err) {
-
-      console.log(err);
-
-      res.status(500).json({
-
-        success: false,
-
-        message:
-          "Error calculating pages ❌",
-
-      });
-
-    }
-
-  }
-);
-
-// ======================
-// CREATE PAYMENT ORDER
-// ======================
-
-app.post("/create-order", async (req, res) => {
-
-  const { amount } = req.body;
-
-  console.log("AMOUNT RECEIVED:", amount);
-
-  const options = {
-    amount: amount * 100, // 🔥 MUST
-    currency: "INR",
-    receipt: "order_" + Date.now(),
-  };
-
-  try {
-    const order = await razorpay.orders.create(options);
-
-    console.log("ORDER CREATED:", order);
-
-    res.json(order);
-  } catch (err) {
-    console.log("RAZORPAY ERROR:", err);
-    res.status(500).send("Error");
-  }
-});
-
-
-/// ======================
-// VERIFY PAYMENT 
-// ======================
-
-app.post("/verify-payment", (req, res) => {
-
-  const {
-    razorpay_order_id,
-    razorpay_payment_id,
-    razorpay_signature
-  } = req.body;
-
-  const crypto = require("crypto");
-
-  const body = razorpay_order_id + "|" + razorpay_payment_id;
-
-  const expectedSignature = crypto
-    .createHmac("sha256", "xmRUfNWyK1ghD1Iu7ru0cLX2")
-    .update(body)
-    .digest("hex");
-
-  if (expectedSignature === razorpay_signature) {
-    res.json({ success: true });
-  } else {
-    res.json({ success: false });
-  }
-});
-
-
-/// ======================
-// PLACE ORDER
-// ======================
-
-app.post(
-  "/order",
-  upload.single("file"),
-  async (req, res) => {
-
-    try {
-
-      console.log("BODY:", req.body);
-
-      const {
-  copies,
-  pickup_time,
-  user_id,
-  order_group_id,
-  payment_id,
-  razorpay_order_id
-} = req.body;
-      // CHECK FILE
-
-      if (!req.file) {
-
-        return res.status(400).json({
-          success: false,
-          message: "No file uploaded ❌",
-        });
-
-      }
-
-      // FILE PATH
-
-      const filePath =
-        req.file.path;
-
-      // READ FILE
-
-      const dataBuffer =
-        fs.readFileSync(filePath);
-
-      // PDF PARSE
-
-      const pdfData =
-        await pdfParse(dataBuffer);
-
-      // PAGE COUNT
-
-      const pageCount =
-        pdfData.numpages;
-
-      // PRICE
-
-      const totalPrice =
-
-        Number(pageCount) *
-
-        Number(copies) *
-
-        2;
-
-      // SAVE TO DATABASE
-
-      const { data, error } = await supabase
-  .from("orders")
-  .insert([
-    {
-      file_name: req.file.originalname,
-      file_url: req.file.path,
-
-      copies: Number(copies),
-      page_count: Number(pageCount),
-      total_price: Number(totalPrice),
-
-      pickup_time: pickup_time,
-
-      user_id: Number(user_id),
-
-      // ✅ PAYMENT DATA (ADDED)
-      payment_id: payment_id,
-      razorpay_order_id: razorpay_order_id,
-
-      status: "pending",
-
-      order_group_id: order_group_id,
-    }
-  ]);
-
-if (error) {
-  console.error("SUPABASE ERROR:", error);
-  return res.status(500).json({ error: "Order failed" });
 }
 
-res.json({ success: true, data });
-      // SUCCESS
+const isMatch =
+  await bcrypt.compare(
+    password,
+    user.password
+  );
 
-      res.json({
+if (!isMatch) {
 
-        success: true,
+  return res
+    .status(400)
+    .json({
+      message:
+        "Wrong password ❌",
+    });
 
-        message:
-          "Order placed successfully ✅",
+}
 
-        total_pages:
-          pageCount,
+res.json({
 
-        total_price:
-          totalPrice,
+  message:
+    "Login successful ✅",
+
+  user,
+
+});
+
+      } catch (err) {
+
+        console.log(err);
+
+        res.status(500).json({
+
+          message:
+            "Server Error ❌",
+
+        });
+
+      }
+
+    }
+  );
+
+
+  // ======================
+  // CALCULATE PRICE
+  // ======================
+
+  app.post(
+    "/upload",
+    upload.array("files", 10),
+    async (req, res) => {
+
+      console.log("UPLOAD HIT");
+  console.log("REQ FILES:", req.files);
+      try {
+
+        if (!req.files) {
+
+          return res
+            .status(400)
+            .json({
+              message:
+                "No files uploaded ❌",
+            });
+
+        }
+
+        let filesData = [];
+
+        for (const file of req.files) {
+
+    try {
+
+      const dataBuffer =
+        fs.readFileSync(
+          file.path
+        );
+
+      const pdfData =
+        await pdfParse(
+          dataBuffer
+        );
+
+      const pages =
+        pdfData.numpages;
+
+      console.log(
+        file.originalname,
+        pages
+      );
+
+      filesData.push({
+
+        file_name:
+          file.originalname,
+
+        pages,
 
       });
 
     } catch (err) {
 
       console.log(
-        "SERVER ERROR:",
-        err
+        "PDF ERROR:",
+        file.originalname
       );
 
-      res.status(500).json({
+      console.log(
+        err.message
+      );
 
-        success: false,
-
-        error:
-          "Something went wrong ❌",
-
-      });
+      // Skip bad PDF
+      continue;
 
     }
 
   }
-);
+  if (filesData.length === 0) {
+
+    return res.status(400).json({
+
+      success: false,
+
+      message:
+        "None of the uploaded PDFs could be processed ❌"
+
+    });
+
+  }
+        res.json({
+
+          success: true,
+
+          files: filesData,
+
+        });
+
+      } catch (err) {
+
+        console.log(err);
+
+        res.status(500).json({
+
+          success: false,
+
+          message:
+            "Error calculating pages ❌",
+
+        });
+
+      }
+
+    }
+  );
+
+  // ======================
+  // CREATE PAYMENT ORDER
+  // ======================
+
+  app.post("/create-order", async (req, res) => {
+
+    const { amount } = req.body;
+
+    console.log("AMOUNT RECEIVED:", amount);
+
+    const options = {
+      amount: amount * 100, // 🔥 MUST
+      currency: "INR",
+      receipt: "order_" + Date.now(),
+    };
+
+    try {
+      const order = await razorpay.orders.create(options);
+
+      console.log("ORDER CREATED:", order);
+
+      res.json(order);
+    } catch (err) {
+
+    console.log("RAZORPAY ERROR:", err);
+
+    return res.status(500).json({
+      success: false,
+      error: err.message
+    });
+
+  }
+  });
 
 
-// ======================
-// GET ALL ORDERS
-// ======================
+  /// ======================
+  // VERIFY PAYMENT 
+  // ======================
 
-app.get(
-  "/admin/orders",
-  async (req, res) => {
+  app.post("/verify-payment", (req, res) => {
+
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature
+    } = req.body;
+
+    const crypto = require("crypto");
+
+    const body =
+      razorpay_order_id + "|" +
+      razorpay_payment_id;
+
+    const expectedSignature = crypto
+      .createHmac(
+        "sha256",
+        process.env.RAZORPAY_KEY_SECRET
+      )
+      .update(body)
+      .digest("hex");
+
+    console.log("EXPECTED:", expectedSignature);
+    console.log("RECEIVED:", razorpay_signature);
+
+    if (expectedSignature === razorpay_signature) {
+      return res.json({ success: true });
+    }
+
+    return res.json({ success: false });
+  });
+
+  /// ======================
+  // PLACE ORDER
+  // ======================
+
+  app.post(
+    "/order",
+    upload.single("file"),
+    async (req, res) => {
+
+      try {
+
+        console.log("BODY:", req.body);
+
+      const {
+    copies,
+    print_type,
+    pickup_time,
+    user_id,
+    order_group_id,
+    payment_id,
+    razorpay_order_id
+  } = req.body;
+  console.log("PRINT TYPE:", print_type);
+        // CHECK FILE
+
+        if (!req.file) {
+
+          return res.status(400).json({
+            success: false,
+            message: "No file uploaded ❌",
+          });
+
+        }
+
+        // FILE PATH
+
+        const filePath =
+          req.file.path;
+
+        // READ FILE
+
+        const dataBuffer =
+          fs.readFileSync(filePath);
+
+        // PDF PARSE
+
+        const pdfData =
+          await pdfParse(dataBuffer);
+
+        // PAGE COUNT
+
+        const pageCount =
+          pdfData.numpages;
+
+        // PRICE
+
+       const rate =
+  print_type === "color"
+    ? 5
+    : 1;
+
+const totalPrice =
+  Number(pageCount) *
+  Number(copies) *
+  rate;
+
+        // SAVE TO DATABASE
+
+        const { data, error } = await supabase
+    .from("orders")
+    .insert([
+      {
+        file_name: req.file.originalname,
+        file_url: req.file.path,
+
+        copies: Number(copies),
+        page_count: Number(pageCount),
+        total_price: Number(totalPrice),
+        print_type: print_type,
+
+        pickup_time: pickup_time,
+
+        user_id: Number(user_id),
+        
+
+        // ✅ PAYMENT DATA (ADDED)
+        payment_id: payment_id,
+        razorpay_order_id: razorpay_order_id,
+
+        status: "pending",
+
+        order_group_id: order_group_id,
+      }
+    ]);
+
+  if (error) {
+    console.error("SUPABASE ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      error: "Order failed"
+    });
+  }
+
+  return res.json({
+    success: true,
+    message: "Order placed successfully ✅",
+    total_pages: pageCount,
+    total_price: totalPrice,
+    data: data
+  });
+
+      } catch (err) {
+
+        console.log(
+          "SERVER ERROR:",
+          err
+        );
+
+        res.status(500).json({
+
+          success: false,
+
+          error:
+            "Something went wrong ❌",
+
+        });
+
+      }
+
+    }
+  );
+  // ======================
+  // GET USER ORDERS
+  // ======================
+
+  app.get("/orders/:userId", async (req, res) => {
 
     try {
 
+      const { userId } = req.params;
+
       const { data, error } = await supabase
-  .from("orders")
-  .select(`
-    *,
-    users (
-      name,
-      email
-    )
-  `)
-  .order("created_at", {
-    ascending: false,
-  });
+        .from("orders")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", {
+          ascending: false,
+        });
 
       if (error) {
-
-        return res
-          .status(400)
-          .json({
-            message:
-              "Error fetching orders ❌",
-          });
-
+        return res.status(400).json({
+          message: "Error fetching orders ❌",
+        });
       }
 
       res.json(data);
@@ -550,85 +635,133 @@ app.get(
       console.log(err);
 
       res.status(500).json({
-
-        message:
-          "Server Error ❌",
-
+        message: "Server Error ❌",
       });
 
     }
 
-  }
-);
+  });
 
+  // ======================
+  // GET ALL ORDERS
+  // ======================
 
-// ======================
-// UPDATE ORDER STATUS
-// ======================
+  app.get(
+    "/admin/orders",
+    async (req, res) => {
 
-app.put(
-  "/admin/order/:id",
-  async (req, res) => {
+      try {
 
-    try {
+        const { data, error } = await supabase
+    .from("orders")
+    .select(`
+      *,
+      users (
+        name,
+        email
+      )
+    `)
+    .order("created_at", {
+      ascending: false,
+    });
 
-      const { id } =
-        req.params;
+        if (error) {
 
-      const { status } =
-        req.body;
+          return res
+            .status(400)
+            .json({
+              message:
+                "Error fetching orders ❌",
+            });
 
-      const { error } =
-        await supabase
-          .from("orders")
-          .update({
-            status,
-          })
-          .eq("id", id);
+        }
 
-      if (error) {
+        res.json(data);
 
-        return res
-          .status(400)
-          .json({
-            message:
-              "Update failed ❌",
-          });
+      } catch (err) {
+
+        console.log(err);
+
+        res.status(500).json({
+
+          message:
+            "Server Error ❌",
+
+        });
 
       }
 
-      res.json({
-
-        message:
-          "Status updated ✅",
-
-      });
-
-    } catch (err) {
-
-      console.log(err);
-
-      res.status(500).json({
-
-        message:
-          "Server Error ❌",
-
-      });
-
     }
-
-  }
-);
-
-
-// ======================
-// START SERVER
-// ======================
-
-app.listen(5000, () => {
-
-  console.log(
-    "Server running on port 5000 🚀"
   );
 
-});
+
+  // ======================
+  // UPDATE ORDER STATUS
+  // ======================
+
+  app.put(
+    "/admin/order/:id",
+    async (req, res) => {
+
+      try {
+
+        const { id } =
+          req.params;
+
+        const { status } =
+          req.body;
+
+        const { error } =
+          await supabase
+            .from("orders")
+            .update({
+              status,
+            })
+            .eq("id", id);
+
+        if (error) {
+
+          return res
+            .status(400)
+            .json({
+              message:
+                "Update failed ❌",
+            });
+
+        }
+
+        res.json({
+
+          message:
+            "Status updated ✅",
+
+        });
+
+      } catch (err) {
+
+        console.log(err);
+
+        res.status(500).json({
+
+          message:
+            "Server Error ❌",
+
+        });
+
+      }
+
+    }
+  );
+
+
+  // ======================
+  // START SERVER
+  // ======================
+
+  app.listen(5000, () => {
+
+    console.log(
+      "Server running on port 5000 🚀"
+    );
+
+  });

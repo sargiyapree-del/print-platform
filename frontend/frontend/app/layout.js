@@ -24,24 +24,28 @@ export default function RootLayout({ children }) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body
-      
         className="min-h-full"
         style={{
           margin: 0,
           background: "#f5f7fb",
           fontFamily: "Arial, sans-serif",
-          
         }}
-        
       >
-        <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "20px" }}>
+        <div
+          style={{
+            maxWidth: "1200px",
+            margin: "0 auto",
+            padding: "20px",
+          }}
+        >
           {children}
         </div>
 
+        {/* Razorpay Script */}
         <Script
-  src="https://checkout.razorpay.com/v1/checkout.js"
-  strategy="beforeInteractive"
-/>
+          src="https://checkout.razorpay.com/v1/checkout.js"
+          strategy="afterInteractive"
+        />
       </body>
     </html>
   );

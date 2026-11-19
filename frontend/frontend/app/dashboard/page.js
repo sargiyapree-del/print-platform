@@ -24,17 +24,28 @@ if (!pickupTime) {
   
 } 
 const selectedTime = new Date(pickupTime);
-
 const now = new Date();
 
-if (selectedTime <= now) {
+const minimumTime = new Date(
+  now.getTime() + 5 * 60 * 1000
+);
+console.log("Pickup Time:", pickupTime);
+console.log("Selected Time:", selectedTime);
+console.log("Current Time:", now);
+console.log("Minimum Time:", minimumTime);
+const selectedTimestamp = selectedTime.getTime();
+const minimumTimestamp = minimumTime.getTime();
+
+console.log("Selected TS:", selectedTimestamp);
+console.log("Minimum TS:", minimumTimestamp);
+
+if (selectedTimestamp < minimumTimestamp) {
 
   setLoading(false);
 
   return alert(
-    "Selected pickup time has already passed ❌"
+    "Please select a pickup time at least 5 minutes from now ❌"
   );
-
 }
   try {
 
@@ -59,7 +70,7 @@ console.log("ORDER RESPONSE:", order);
 
 console.log("ORDER:", order); // ✅ moved outside
 const options = {
-  key: "rzp_test_SpMl5uu8UaMcsp",
+  key: "rzp_test_T4I8GqjjfTJ4ui",
   amount: order.amount,
   currency: "INR",
   order_id: order.id,
@@ -69,7 +80,25 @@ const options = {
 
   handler: async function (response) {
 
-  console.log("PAYMENT RESPONSE:", response);
+  console.log(
+  "FULL PAYMENT RESPONSE:",
+  JSON.stringify(response, null, 2)
+);
+
+console.log(
+  "PAYMENT ID:",
+  response.razorpay_payment_id
+);
+
+console.log(
+  "ORDER ID:",
+  response.razorpay_order_id
+);
+
+console.log(
+  "SIGNATURE:",
+  response.razorpay_signature
+);
 
   const verifyRes = await fetch("http://localhost:5000/verify-payment", {
     method: "POST",
@@ -145,6 +174,7 @@ const options = {
   const [fileDetails, setFileDetails] =
     useState([]);
     const [successMessage, setSuccessMessage] = useState("");
+    const [user, setUser] = useState(null);
     
 
   // ======================
@@ -161,6 +191,7 @@ const options = {
       router.push("/login");
 
       return;
+      setUser(JSON.parse(user));
 
     }
 
@@ -186,27 +217,36 @@ const options = {
   // FETCH ORDERS
   // ======================
 
-  const fetchOrders = async () => {
+ const fetchOrders = async () => {
 
-    try {
+  try {
 
-      const res = await fetch(
-        "http://localhost:5000/admin/orders"
-      );
+    const user = JSON.parse(
+      localStorage.getItem("user")
+    );
 
-      const data =
-        await res.json();
+    console.log("USER:", user);
 
-      setOrders(data);
+    const res = await fetch(
+      `http://localhost:5000/orders/${user.id}`
+    );
 
-    } catch (err) {
+    console.log("STATUS:", res.status);
 
-  console.error(err);
+    const text = await res.text();
 
-  alert("Failed to load orders ❌");
+    console.log("RESPONSE:", text);
 
-}
-  };
+    const data = JSON.parse(text);
+
+    setOrders(Array.isArray(data) ? data : []);
+
+  } catch (err) {
+
+    console.error("FETCH ERROR:", err);
+
+  }
+};
 
   // ======================
   // CALCULATE PRICE
@@ -217,8 +257,8 @@ setAnalyzing(true);
   if (selectedFiles.length === 0) {
     setAnalyzing(false);
     return alert("Select PDFs ❌");
-
   }
+    
 
  const invalidFile = selectedFiles.find(
     file => file.type !== "application/pdf"
@@ -234,6 +274,7 @@ setAnalyzing(true);
 
       const formData =
         new FormData();
+       
 
       selectedFiles.forEach((file) => {
         formData.append(
@@ -251,38 +292,47 @@ setAnalyzing(true);
         }
       );
 
-      const data =
-        await res.json();
-        console.log("STATUS:", res.status);
-console.log("DATA:", data);
-        console.log("UPLOAD RESPONSE:", data);
+     const data = await res.json();
 
-      console.log(data);
+console.log("STATUS:", res.status);
+console.log("UPLOAD RESPONSE:", data);
 
-      if (!data.files) {
-  console.log("API ERROR:", data);
+if (!res.ok) {
+  setAnalyzing(false);
+
+  return alert(
+    data.message ||
+    data.error ||
+    "Upload failed ❌"
+  );
+}
+
+if (!data.files || data.files.length === 0) {
 
   setAnalyzing(false);
 
   return alert(
-    "Server did not return files ❌"
+    "No files received from server ❌"
   );
 }
 
 const updatedFiles =
   data.files.map((file) => ({
 
-          ...file,
+    ...file,
 
-          copies: 1,
+    copies: 1,
 
-          price:
-            file.pages * 1 * 2,
+    printType: "bw",
 
-        }));
+    price:
+      file.pages * 1 * 1,
 
-      setFileDetails(updatedFiles);
-      setAnalyzing(false);
+  }));
+  setFileDetails(updatedFiles);
+
+setAnalyzing(false); 
+  
 
       // CLEAR INPUT
 
@@ -376,6 +426,14 @@ if (selectedTime <= now) {
           "copies",
           fileData.copies
         );
+        console.log(
+  "SENDING PRINT TYPE:",
+  fileData.printType
+);
+        formData.append(
+  "print_type",
+  fileData.printType
+);
 
         formData.append(
           "pickup_time",
@@ -496,7 +554,86 @@ Total Bill: ₹${totalOrderPrice}`
       {/* MAIN */}
 
       <div className="max-w-7xl mx-auto p-6">
+        {/* HERO SECTION */}
 
+<div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-3xl p-8 mb-8 shadow-xl">
+
+  <h1 className="text-4xl font-bold">
+    👋 Welcome {user?.name}
+    
+  </h1>
+
+  <p className="mt-3 text-lg text-blue-100">
+    Upload PDFs and get them printed without waiting in queues.
+  </p>
+
+</div>
+
+{
+  orders.some(
+    order =>
+      order.status === "ready"
+  ) && (
+
+    <div className="bg-purple-100 border border-purple-300 text-purple-800 p-4 rounded-2xl mb-6">
+
+      🎉 One or more of your orders are ready for pickup.
+
+    </div>
+
+  )
+}
+
+<div className="grid md:grid-cols-3 gap-6 mb-8">
+
+  <div className="bg-white p-6 rounded-2xl shadow-lg">
+
+    <h3 className="text-gray-500">
+      Total Orders
+    </h3>
+
+    <p className="text-4xl font-bold text-blue-600">
+      {orders.length}
+    </p>
+
+  </div>
+
+  <div className="bg-white p-6 rounded-2xl shadow-lg">
+
+    <h3 className="text-gray-500">
+      Active Orders
+    </h3>
+
+    <p className="text-4xl font-bold text-yellow-500">
+      {
+        orders.filter(
+          order =>
+            order.status !== "completed"
+        ).length
+      }
+    </p>
+
+  </div>
+
+  <div className="bg-white p-6 rounded-2xl shadow-lg">
+
+    <h3 className="text-gray-500">
+      Total Spent
+    </h3>
+
+    <p className="text-4xl font-bold text-green-600">
+      ₹{
+        orders.reduce(
+          (sum, order) =>
+            sum + Number(order.total_price),
+          0
+        )
+      }
+    </p>
+
+  </div>
+
+</div>
         <div className="grid md:grid-cols-2 gap-8">
 
           {/* LEFT PANEL */}
@@ -600,34 +737,31 @@ Total Bill: ₹${totalOrderPrice}`
 
             {/* PICKUP */}
 
-        <input
-  type="datetime-local"
-  min={new Date().toISOString().slice(0, 16)}
-  value={pickupTime}
-  onChange={(e) => {
+      <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4 mb-4">
 
-    const selectedTime =
-      new Date(e.target.value);
+  <div className="flex items-center gap-2 mb-2">
+    <span className="text-2xl">⏰</span>
 
-    const now = new Date();
+    <h3 className="font-bold text-lg text-indigo-700">
+      When do you want to collect your prints?
+    </h3>
+  </div>
 
-    if (selectedTime <= now) {
+  <p className="text-sm text-gray-600 mb-4">
+    Select your preferred pickup date & time.
+    Orders can be collected after a minimum of 5 minutes.
+  </p>
 
-      alert(
-        "Pickup time must be in future ❌"
-      );
+  <input
+    type="datetime-local"
+    value={pickupTime}
+    onChange={(e) => setPickupTime(e.target.value)}
+    className="w-full border-2 border-indigo-200 rounded-xl p-4 text-lg focus:outline-none focus:border-indigo-500 bg-white"
+  />
 
-      return;
+</div>
 
-    }
-
-    setPickupTime(
-      e.target.value
-    );
-
-  }}
-  className="w-full border border-gray-300 p-4 rounded-xl mb-5 bg-white text-black"
-/>
+   
             {/* CALCULATE */}
 
           <div className="bg-green-50 border border-green-200 p-3 rounded-xl mb-4">
@@ -768,14 +902,16 @@ Total Bill: ₹${totalOrderPrice}`
                             updated[index]
                               .copies -= 1;
 
-                            updated[index]
-                              .price =
-                              updated[index]
-                                .pages *
-                              updated[index]
-                                .copies *
-                              2;
+                           const rate =
+                           updated[index].printType ===
+                          "color"
+                            ? 5
+                            : 1;
 
+updated[index].price =
+  updated[index].pages *
+  updated[index].copies *
+  rate;
                             setFileDetails(
                               updated
                             );
@@ -803,18 +939,18 @@ Total Bill: ₹${totalOrderPrice}`
 
                           const updated =
                             [...fileDetails];
+                            updated[index].copies += 1;
 
-                          updated[index]
-                            .copies += 1;
+                         const rate =
+  updated[index].printType ===
+  "color"
+    ? 5
+    : 1;
 
-                          updated[index]
-                            .price =
-                            updated[index]  
-                              .pages *
-                            updated[index]
-                              .copies *
-                            2;
-
+updated[index].price =
+  updated[index].pages *
+  updated[index].copies *
+  rate;
                           setFileDetails(
                             updated
                           );
@@ -826,6 +962,43 @@ Total Bill: ₹${totalOrderPrice}`
                       </button>
 
                     </div>
+                    
+<p className="mt-3 font-medium">
+  Print Type
+</p>
+
+<select
+  value={file.printType}
+  onChange={(e) => {
+
+    const updated = [...fileDetails];
+
+    updated[index].printType =
+      e.target.value;
+
+    const rate =
+      e.target.value === "color"
+        ? 5
+        : 1;
+
+    updated[index].price =
+      updated[index].pages *
+      updated[index].copies *
+      rate;
+
+    setFileDetails(updated);
+
+  }}
+  className="mt-4 border p-2 rounded-lg w-full"
+>
+  <option value="bw">
+    Black & White (₹1/page)
+  </option>
+
+  <option value="color">
+    Color (₹5/page)
+  </option>
+</select>
 
                     {/* PRICE */}
 

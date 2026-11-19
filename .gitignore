@@ -1,4 +1,10 @@
 node_modules/
-backend/uploads/
 .env
+.env.*
+!.env.example
+
 .next/
+dist/
+build/
+
+uploads/
